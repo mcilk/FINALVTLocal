@@ -36,7 +36,7 @@ ACCEPTABLE_YEARS = list(range(2017, 2024))  # 2017–2023 inclusive
 # Data sources (official)
 # ----------------------
 VCGI_TOWN_FEATURESERVICE = (
-    "https://geodata.vermont.gov/arcgis/rest/services/VCGI/VT_Data_Boundaries/FeatureServer/9/query"
+    "https://services.arcgis.com/pwNwIGBE7M7VOXjQ/arcgis/rest/services/VT_Town_Boundaries__VCGI_/FeatureServer/0/query"
 )
 # Layer 9 = Town Boundaries (current as of portal config). If the layer id changes, you can browse the portal item and update.
 # Query parameters for full GeoJSON
