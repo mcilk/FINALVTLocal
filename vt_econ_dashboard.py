@@ -126,21 +126,18 @@ with col1:
     # Display as markdown table
     st.markdown(df_display.to_markdown(index=False), unsafe_allow_html=True)
 
-with col2:
-    st.subheader("Interactive Map")
-    m = make_map(gdf, econ_df)
-    st_folium(m, width=900, height=650)
+with col1:
+    st.subheader("Town Data")
 
-# --- Sources section
-st.markdown("---")
-st.markdown("### Sources")
-st.markdown(
-    "- Vermont Center for Geographic Information (VCGI): "
-    "[Town Boundaries Service](https://services.arcgis.com/pwNwIGBE7M7VOXjQ/arcgis/rest/services/VT_Town_Boundaries__VCGI_/FeatureServer/0)"
-)
-st.markdown(
-    "- Placeholder economic data — replace with official datasets: "
-    "[US Census ACS](https://data.census.gov/) | "
-    "[Vermont Department of Labor](https://labor.vermont.gov/) | "
-    "[Town/City Websites](https://www.vermont.gov/municipalities)"
-)
+    # Remove index col, add policy link column
+    df_display = econ_df.copy()
+    df_display["Policy Link"] = df_display["Policy Link"].apply(
+        lambda url: f"[Link]({url})"
+    )
+
+    # Display with Streamlit's built-in interactive table
+    st.dataframe(
+        df_display,
+        use_container_width=True,
+        hide_index=True
+    )
