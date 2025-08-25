@@ -9,7 +9,7 @@ from streamlit_folium import st_folium
 st.set_page_config(layout="wide", page_title="Vermont Local Economic Dashboard")
 
 # -------------------------------------------------------------------
-# Vermont Town Boundaries Feature Service (working as of Aug 2025)
+# Vermont Town Boundaries (working service)
 # -------------------------------------------------------------------
 VCGI_TOWN_FEATURESERVICE = (
     "https://services.arcgis.com/pwNwIGBE7M7VOXjQ/"
@@ -33,14 +33,12 @@ def fetch_vcgi_town_boundaries():
         return gdf
     except Exception as e:
         st.error(f"Could not fetch Vermont town boundaries: {e}")
-        return gpd.GeoDataFrame()  # return empty GeoDataFrame if fetch fails
+        return gpd.GeoDataFrame()  # return empty if fail
 
 # -------------------------------------------------------------------
-# Placeholder for economic + policy data
-# (replace this later with real data sources)
+# Example Economic + Policy Data (replace with real datasets later)
 # -------------------------------------------------------------------
 def load_economic_data():
-    # Example dummy dataset
     data = {
         "town": ["Burlington", "Montpelier", "Rutland", "Brattleboro"],
         "population": [44000, 7900, 15500, 12000],
@@ -109,7 +107,7 @@ with col2:
 
     st.markdown("### Sources")
     st.markdown(
-        "- Vermont Center for Geographic Information (VCGI) "
+        "- Vermont Center for Geographic Information (VCGI): "
         "[Town Boundaries Service](https://services.arcgis.com/pwNwIGBE7M7VOXjQ/arcgis/rest/services/VT_Town_Boundaries__VCGI_/FeatureServer/0)"
     )
     st.markdown(
