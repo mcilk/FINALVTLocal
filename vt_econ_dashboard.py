@@ -5,146 +5,112 @@ import requests
 import folium
 from streamlit_folium import st_folium
 
-st.set_page_config(layout="wide")
+# -------------------------
+# Streamlit Page Setup
+# -------------------------
+st.set_page_config(layout="wide", page_title="Vermont Town Economic Dashboard")
 
-# -------------------
-# DATA FUNCTIONS
-# -------------------
-
+# -------------------------
+# Fetch Vermont Town Boundaries (VCGI ArcGIS)
+# -------------------------
 @st.cache_data
-def fetch_vcgi_town_boundaries():
-    """Fetch official Vermont town boundaries from VCGI GeoData service."""
-    url = "https://services1.arcgis.com/1yYz4jU0hRIhL1jX/arcgis/rest/services/VT_Town_Boundaries/FeatureServer/0/query"
-    params = {
-        "where": "1=1",
-        "outFields": "*",
-        "f": "geojson"
-    }
+def fetch_town_boundaries():
+    url = "https://services.arcgis.com/pwNwIGBE7M7VOXjQ/arcgis/rest/services/VT_Town_Boundaries__VCGI_/FeatureServer/0/query"
+    params = {"where": "1=1", "outFields": "*", "f": "geojson"}
     r = requests.get(url, params=params)
     r.raise_for_status()
-    gdf = gpd.read_file(r.text)
-    gdf = gdf.rename(columns={"TOWNNAME": "Town Name"})
-    # Create GEOID to join with Census
-    gdf["GEOID"] = gdf["TOWNID"].astype(str).str.zfill(5)
-    return gdf
+    return gpd.read_file(r.text)
 
-
+# -------------------------
+# Fetch ACS Economic Data (2023 5-year)
+# -------------------------
 @st.cache_data
-def fetch_acs_town_data(year=2022):
-    """Fetch ACS economic indicators for all Vermont towns (county subdivisions)."""
+def fetch_acs_data(year=2023):
     profile_vars = {
         "DP03_0009PE": "Unemployment Rate (%)",
         "DP03_0119PE": "Poverty Rate (%)",
-        "DP02_0068PE": "Bachelor's Degree or Higher (%)"
+        "DP02_0068PE": "Bachelor's Degree + (%)"
     }
-    detailed_vars = {
-        "B19013_001E": "Median Household Income"
-    }
+    detail_vars = {"B19013_001E": "Median Income"}
 
-    base_url = f"https://api.census.gov/data/{year}/acs/acs5"
-    profile_url = f"{base_url}/profile"
+    base = f"https://api.census.gov/data/{year}/acs/acs5"
+    prof_url = f"{base}/profile"
 
-    # Profile request
+    # Profile call
     prof_params = {
         "get": ",".join(profile_vars.keys()) + ",NAME",
         "for": "county subdivision:*",
-        "in": "state:50"   # Vermont FIPS = 50
+        "in": "state:50"
     }
-    prof_r = requests.get(profile_url, params=prof_params)
-    prof_r.raise_for_status()
-    prof_json = prof_r.json()
-    prof_df = pd.DataFrame(prof_json[1:], columns=prof_json[0])
+    prof = requests.get(prof_url, params=prof_params).json()
+    prof_df = pd.DataFrame(prof[1:], columns=prof[0])
 
-    # Detailed request
+    # Detailed call
     det_params = {
-        "get": ",".join(detailed_vars.keys()) + ",NAME",
+        "get": ",".join(detail_vars.keys()) + ",NAME",
         "for": "county subdivision:*",
         "in": "state:50"
     }
-    det_r = requests.get(base_url, params=det_params)
-    det_r.raise_for_status()
-    det_json = det_r.json()
-    det_df = pd.DataFrame(det_json[1:], columns=det_json[0])
+    det = requests.get(base, params=det_params).json()
+    det_df = pd.DataFrame(det[1:], columns=det[0])
 
-    # GEOID construction
+    # Build GEOID
     prof_df["GEOID"] = prof_df["state"] + prof_df["county"] + prof_df["county subdivision"]
     det_df["GEOID"] = det_df["state"] + det_df["county"] + det_df["county subdivision"]
 
-    df = prof_df.merge(det_df[["GEOID"] + list(detailed_vars.keys())], on="GEOID", how="left")
+    # Merge
+    df = prof_df.merge(det_df[["GEOID"] + list(detail_vars.keys())], on="GEOID", how="left")
+    df = df.rename(columns={**profile_vars, **detail_vars, "NAME": "Town"})
 
-    # Rename columns
-    df = df.rename(columns={**profile_vars, **detailed_vars, "NAME": "Town Name"})
-    return df
+    return df[["GEOID", "Town"] + list(profile_vars.values()) + list(detail_vars.values())]
 
+# -------------------------
+# Load & Merge
+# -------------------------
+gdf = fetch_town_boundaries()
+acs = fetch_acs_data()
+merged = gdf.merge(acs, left_on="GEOID", right_on="GEOID", how="left")
 
-# -------------------
-# MAIN APP
-# -------------------
+# -------------------------
+# Build Table
+# -------------------------
+table = merged[["Town", "Median Income", "Unemployment Rate (%)",
+                "Poverty Rate (%)", "Bachelor's Degree + (%)"]].copy()
 
-st.markdown(
-    """
-    <style>
-    .stApp {
-        background-image: url('https://upload.wikimedia.org/wikipedia/commons/2/25/Green_Mountains%2C_Vermont.jpg');
-        background-size: cover;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
+# -------------------------
+# Streamlit Layout
+# -------------------------
+st.title("🌄 Vermont Town Economic Dashboard")
 
-st.title("📊 Vermont Towns Economic Dashboard")
+col1, col2 = st.columns([1, 2])
 
-# Load boundary + ACS data
-gdf = fetch_vcgi_town_boundaries()
-acs_df = fetch_acs_town_data()
-
-# Merge
-merged = gdf.merge(acs_df, on="GEOID", how="left")
-
-# Clean table for display
-table_df = merged[[
-    "Town Name",
-    "Median Household Income",
-    "Unemployment Rate (%)",
-    "Poverty Rate (%)",
-    "Bachelor's Degree or Higher (%)"
-]].copy()
-
-table_df.columns = ["Town", "Median Income", "Unemployment Rate", "Poverty Rate", "Bachelor's Degree +"]
-
-# -------------------
-# LAYOUT
-# -------------------
-col1, col2 = st.columns([1.2, 2])
-
+# --- Left Column: Table ---
 with col1:
-    st.subheader("📋 Town Economic Data")
-    st.dataframe(table_df, use_container_width=True, hide_index=True)
+    st.subheader("Town Economic Metrics")
+    st.dataframe(table, use_container_width=True, hide_index=True)
 
+# --- Right Column: Map ---
 with col2:
-    st.subheader("🗺️ Vermont Town Map")
-    # Create map
-    vt_map = folium.Map(location=[44.0, -72.7], zoom_start=7, tiles="cartodbpositron")
-    folium.GeoJson(
-        merged,
-        name="Towns",
-        tooltip=folium.features.GeoJsonTooltip(
-            fields=["Town Name", "Median Household Income", "Unemployment Rate (%)"],
-            aliases=["Town", "Median Income", "Unemployment Rate"],
-            localize=True
-        )
-    ).add_to(vt_map)
+    st.subheader("Map View (Median Income)")
+    m = folium.Map(location=[44.0, -72.7], zoom_start=7, tiles="cartodbpositron")
+    folium.Choropleth(
+        geo_data=merged,
+        data=merged,
+        columns=["GEOID", "Median Income"],
+        key_on="feature.properties.GEOID",
+        fill_color="YlGnBu",
+        fill_opacity=0.7,
+        line_opacity=0.2,
+        legend_name="Median Income (USD)"
+    ).add_to(m)
+    st_folium(m, width=700, height=600)
 
-    st_folium(vt_map, width=700, height=600)
-
-# -------------------
-# SOURCES
-# -------------------
-st.markdown("### 📚 Sources")
-st.markdown(
-    """
-    - [U.S. Census Bureau ACS](https://data.census.gov/)  
-    - [Vermont Center for Geographic Information (VCGI)](https://geodata.vermont.gov/)  
-    """
-)
+# -------------------------
+# Sources
+# -------------------------
+st.markdown("""
+---
+**Sources:**  
+- [U.S. Census Bureau, American Community Survey (ACS) 2023 5-year](https://data.census.gov/)  
+- [Vermont Center for Geographic Information (VCGI)](https://vcgi.vermont.gov/)  
+""")
